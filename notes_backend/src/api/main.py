@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_serializer
 from starlette.responses import JSONResponse
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -94,11 +94,16 @@ class UserCreate(UserBase):
 class UserPublic(UserBase):
     # PUBLIC_INTERFACE
     id: PyObjectId = Field(..., alias="_id", description="User identifier")
+
+    @field_serializer("id")
+    def serialize_id(self, v: PyObjectId) -> str:
+        """Serialize Mongo ObjectId to string for API responses."""
+        return str(v)
+
     # Allow population by field name so 'id' works, and alias usage for '_id'
     model_config = ConfigDict(
         populate_by_name=True,
         from_attributes=True,
-        str_strip_whitespace=True,
         arbitrary_types_allowed=True,
     )
 
@@ -145,6 +150,11 @@ class NotePublic(NoteBase):
     user_id: PyObjectId = Field(..., description="Owner user id")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+    @field_serializer("id", "user_id")
+    def serialize_object_ids(self, v: PyObjectId) -> str:
+        """Serialize Mongo ObjectId fields to string for API responses."""
+        return str(v)
 
     model_config = ConfigDict(
         populate_by_name=True,
