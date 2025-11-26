@@ -65,28 +65,50 @@ class Token(BaseModel):
     access_token: str = Field(..., description="JWT access token")
     token_type: str = Field("bearer", description="Token type")
 
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
+
 class TokenData(BaseModel):
     user_id: Optional[str] = None
     email: Optional[str] = None
 
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
+
 class UserBase(BaseModel):
     email: EmailStr = Field(..., description="User email address")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, description="Plaintext password to register")
 
 class UserPublic(UserBase):
+    # PUBLIC_INTERFACE
     id: PyObjectId = Field(..., alias="_id", description="User identifier")
     # Allow population by field name so 'id' works, and alias usage for '_id'
     model_config = ConfigDict(
         populate_by_name=True,
         from_attributes=True,
         str_strip_whitespace=True,
+        arbitrary_types_allowed=True,
         json_encoders={ObjectId: str, PyObjectId: str},
         ser_json_inf_nan="allow",
     )
 
 class UserDB(UserBase):
+    # PUBLIC_INTERFACE
     # Use public field name with alias to MongoDB '_id'
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id", description="User identifier")
     password_hash: str
@@ -94,6 +116,7 @@ class UserDB(UserBase):
     model_config = ConfigDict(
         populate_by_name=True,
         from_attributes=True,
+        arbitrary_types_allowed=True,
         json_encoders={ObjectId: str, PyObjectId: str},
     )
 
@@ -102,6 +125,12 @@ class NoteBase(BaseModel):
     content: str = Field("", description="Note body/content")
     tags: List[str] = Field(default_factory=list, description="List of tags")
     archived: bool = Field(False, description="Archived status")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
 
 class NoteCreate(NoteBase):
     pass
@@ -112,7 +141,14 @@ class NoteUpdate(BaseModel):
     tags: Optional[List[str]] = None
     archived: Optional[bool] = None
 
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
+
 class NotePublic(NoteBase):
+    # PUBLIC_INTERFACE
     id: PyObjectId = Field(..., alias="_id", description="Note identifier")
     user_id: PyObjectId = Field(..., description="Owner user id")
     created_at: datetime = Field(..., description="Creation timestamp")
@@ -121,6 +157,7 @@ class NotePublic(NoteBase):
     model_config = ConfigDict(
         populate_by_name=True,
         from_attributes=True,
+        arbitrary_types_allowed=True,
         json_encoders={ObjectId: str, PyObjectId: str},
     )
 
@@ -129,6 +166,12 @@ class NotesListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
 
 
 # =========================
@@ -146,7 +189,7 @@ def mongo_to_api_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
     """Convert a MongoDB document dict to an API-friendly dict mapping _id->id and stringifying ObjectIds."""
     if not doc:
         return doc
-    out = {}
+    out: Dict[str, Any] = {}
     for k, v in doc.items():
         if k == "_id":
             out["id"] = _stringify_object_id(v)
@@ -210,6 +253,12 @@ class Settings(BaseModel):
     jwt_secret: str = Field(..., description="JWT secret for signing")
     jwt_alg: str = Field(default=JWT_ALGORITHM_DEFAULT, description="JWT algorithm")
     access_token_expire_minutes: int = Field(default=ACCESS_TOKEN_EXPIRE_MINUTES_DEFAULT, description="Access token expiry in minutes")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
 
 # PUBLIC_INTERFACE
 def get_settings() -> Settings:
@@ -585,7 +634,7 @@ async def patch_note(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Note not found")
-    return result  # type: ignore
+    return mongo_to_api_doc(result)  # type: ignore
 
 @app.delete(
     "/notes/{note_id}",
@@ -634,4 +683,4 @@ async def archive_note(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Note not found")
-    return result  # type: ignore
+    return mongo_to_api_doc(result)  # type: ignore
