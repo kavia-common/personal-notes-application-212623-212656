@@ -68,7 +68,6 @@ class Token(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 class TokenData(BaseModel):
@@ -78,7 +77,6 @@ class TokenData(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 class UserBase(BaseModel):
@@ -88,7 +86,6 @@ class UserBase(BaseModel):
         populate_by_name=True,
         from_attributes=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 class UserCreate(UserBase):
@@ -103,8 +100,6 @@ class UserPublic(UserBase):
         from_attributes=True,
         str_strip_whitespace=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
-        ser_json_inf_nan="allow",
     )
 
 class UserDB(UserBase):
@@ -117,7 +112,6 @@ class UserDB(UserBase):
         populate_by_name=True,
         from_attributes=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 class NoteBase(BaseModel):
@@ -129,7 +123,6 @@ class NoteBase(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 class NoteCreate(NoteBase):
@@ -144,7 +137,6 @@ class NoteUpdate(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 class NotePublic(NoteBase):
@@ -158,7 +150,6 @@ class NotePublic(NoteBase):
         populate_by_name=True,
         from_attributes=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 class NotesListResponse(BaseModel):
@@ -170,7 +161,6 @@ class NotesListResponse(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 
@@ -257,7 +247,6 @@ class Settings(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str, PyObjectId: str},
     )
 
 # PUBLIC_INTERFACE
