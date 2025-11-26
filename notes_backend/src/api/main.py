@@ -77,14 +77,25 @@ class UserCreate(UserBase):
 
 class UserPublic(UserBase):
     id: PyObjectId = Field(..., alias="_id", description="User identifier")
-
-    model_config = ConfigDict(populate_by_name=True, json_encoders={ObjectId: str})
+    # Allow population by field name so 'id' works, and alias usage for '_id'
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        str_strip_whitespace=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+        ser_json_inf_nan="allow",
+    )
 
 class UserDB(UserBase):
-    _id: PyObjectId = Field(default_factory=PyObjectId)
+    # Use public field name with alias to MongoDB '_id'
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id", description="User identifier")
     password_hash: str
 
-    model_config = ConfigDict(populate_by_name=True, json_encoders={ObjectId: str})
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
 
 class NoteBase(BaseModel):
     title: str = Field(..., min_length=1, description="Note title")
@@ -107,7 +118,11 @@ class NotePublic(NoteBase):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
-    model_config = ConfigDict(populate_by_name=True, json_encoders={ObjectId: str})
+    model_config = ConfigDict(
+        populate_by_name=True,
+        from_attributes=True,
+        json_encoders={ObjectId: str, PyObjectId: str},
+    )
 
 class NotesListResponse(BaseModel):
     items: List[NotePublic]
@@ -115,6 +130,34 @@ class NotesListResponse(BaseModel):
     page: int
     page_size: int
 
+
+# =========================
+# Serialization helpers
+# =========================
+
+def _stringify_object_id(value: Any) -> Any:
+    """Return string version for ObjectId-like values; otherwise unchanged."""
+    if isinstance(value, ObjectId):
+        return str(value)
+    return value
+
+# PUBLIC_INTERFACE
+def mongo_to_api_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a MongoDB document dict to an API-friendly dict mapping _id->id and stringifying ObjectIds."""
+    if not doc:
+        return doc
+    out = {}
+    for k, v in doc.items():
+        if k == "_id":
+            out["id"] = _stringify_object_id(v)
+        else:
+            out[k] = _stringify_object_id(v)
+    return out
+
+# PUBLIC_INTERFACE
+def mongo_to_api_list(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert a list of MongoDB documents to API-friendly dicts."""
+    return [mongo_to_api_doc(d) for d in docs]
 
 # =========================
 # App initialization
@@ -130,6 +173,10 @@ app = FastAPI(
         {"name": "Notes", "description": "CRUD for notes"},
     ],
 )
+# Verification note:
+# from src.api.main import app, UserPublic, NotePublic
+# UserPublic.model_validate({'_id': '65e...', 'email': 'a@b.com'})
+# NotePublic.model_validate({'_id': '65e...', 'user_id': '65e...', 'title': 't', 'content': '', 'tags': [], 'archived': False, 'created_at': datetime.utcnow(), 'updated_at': datetime.utcnow()})
 
 # CORS setup from env
 def get_cors_origins() -> List[str]:
@@ -314,7 +361,7 @@ async def register(user_in: UserCreate = Body(...), database: AsyncIOMotorDataba
     created = await database["users"].find_one({"_id": result.inserted_id})
     # Ensure password hash is not returned
     created.pop("password_hash", None)
-    return created
+    return mongo_to_api_doc(created)
 
 @app.post("/auth/login", response_model=Token, tags=["Auth"], summary="Login", operation_id="auth_login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), database: AsyncIOMotorDatabase = Depends(get_db)) -> Token:
@@ -341,7 +388,7 @@ async def me(current_user: Dict[str, Any] = Depends(get_current_user)) -> Any:
     Get the authenticated user's profile.
     """
     sanitized = {k: v for k, v in current_user.items() if k != "password_hash"}
-    return sanitized
+    return mongo_to_api_doc(sanitized)
 
 
 # =========================
@@ -413,7 +460,8 @@ async def list_notes(
     skip = (page - 1) * page_size
     items = await cursor.skip(skip).limit(page_size).to_list(length=page_size)
 
-    return NotesListResponse(items=items, total=total, page=page, page_size=page_size)
+    api_items = mongo_to_api_list(items)
+    return NotesListResponse(items=api_items, total=total, page=page, page_size=page_size)
 
 @app.post(
     "/notes",
@@ -443,7 +491,7 @@ async def create_note(
     }
     result = await database["notes"].insert_one(doc)
     created = await database["notes"].find_one({"_id": result.inserted_id})
-    return created  # type: ignore
+    return mongo_to_api_doc(created)  # type: ignore
 
 @app.get(
     "/notes/{note_id}",
@@ -465,7 +513,7 @@ async def get_note(
     note = await database["notes"].find_one({"_id": ObjectId(note_id), "user_id": current_user["_id"]})
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
-    return note  # type: ignore
+    return mongo_to_api_doc(note)  # type: ignore
 
 @app.put(
     "/notes/{note_id}",
@@ -501,7 +549,7 @@ async def replace_note(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Note not found")
-    return result  # type: ignore
+    return mongo_to_api_doc(result)  # type: ignore
 
 @app.patch(
     "/notes/{note_id}",
@@ -527,7 +575,7 @@ async def patch_note(
         note = await database["notes"].find_one({"_id": ObjectId(note_id), "user_id": current_user["_id"]})
         if not note:
             raise HTTPException(status_code=404, detail="Note not found")
-        return note  # type: ignore
+        return mongo_to_api_doc(note)  # type: ignore
 
     updates["updated_at"] = datetime.utcnow()
     result = await database["notes"].find_one_and_update(
